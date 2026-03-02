@@ -12,9 +12,9 @@ import {
     ADDRESS_BYTE_LENGTH,
     U256_BYTE_LENGTH,
     BOOLEAN_BYTE_LENGTH,
+    encodeSelector,
 } from '@btc-vision/btc-runtime/runtime';
 
-// ─── Keeper fee: 0.1% ────────────────────────────────────────────────────────
 const KEEPER_FEE_BPS: u64 = 10;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -66,25 +66,35 @@ class WithdrawEvent extends NetEvent {
     }
 }
 
+// ─── Storage helpers ──────────────────────────────────────────────────────────
+
+function u256Stor(pointer: u16, user: Address): StoredU256 {
+    return new StoredU256(pointer, user.toUint8Array());
+}
+
+function addrStor(pointer: u16, user: Address): StoredAddress {
+    return new StoredAddress(pointer, user.toUint8Array());
+}
+
+function boolStor(pointer: u16, user: Address): StoredBoolean {
+    return new StoredBoolean(pointer, user.toUint8Array());
+}
+
+function globalU256(pointer: u16): StoredU256 {
+    const z = new Uint8Array(32);
+    return new StoredU256(pointer, z);
+}
+
 // ─── Main Contract ────────────────────────────────────────────────────────────
 
 @final
 export class DCAVault extends OP_NET {
 
-    private readonly _totalDeposited: StoredU256;
-    private readonly _totalSwapsExecuted: StoredU256;
-    private readonly _totalActiveSchedules: StoredU256;
-
     public constructor() {
         super();
-        this._totalDeposited = new StoredU256(9, u256.Zero);
-        this._totalSwapsExecuted = new StoredU256(10, u256.Zero);
-        this._totalActiveSchedules = new StoredU256(11, u256.Zero);
     }
 
-    public override onDeployment(_calldata: Calldata): void {
-        // Nothing to initialize
-    }
+    public override onDeployment(_calldata: Calldata): void {}
 
     public override onUpdate(_calldata: Calldata): void {
         super.onUpdate(_calldata);
@@ -95,7 +105,6 @@ export class DCAVault extends OP_NET {
         { name: 'inputToken', type: ABIDataTypes.ADDRESS },
         { name: 'amount', type: ABIDataTypes.UINT256 },
     )
-    @emit('ScheduleActivated')
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     public deposit(calldata: Calldata): BytesWriter {
         const user: Address = Blockchain.tx.sender;
@@ -106,22 +115,23 @@ export class DCAVault extends OP_NET {
 
         this._transferFrom(inputToken, user, Blockchain.contractAddress, amount);
 
-        const currentBalance = this._getUserBalance(user);
-        this._setUserBalance(user, u256.add(currentBalance, amount));
+        const bal = u256Stor(3, user);
+        bal.set(u256.add(bal.value, amount));
 
-        const stored = this._getUserInputToken(user);
-        if (stored.isZero()) {
-            this._setUserInputToken(user, inputToken);
+        const storedToken = addrStor(1, user);
+        if (storedToken.value.isZero()) {
+            storedToken.set(inputToken);
         }
 
-        this._totalDeposited.value = u256.add(this._totalDeposited.value, amount);
+        const td = globalU256(200);
+        td.set(u256.add(td.value, amount));
 
         const writer = new BytesWriter(BOOLEAN_BYTE_LENGTH);
         writer.writeBoolean(true);
         return writer;
     }
 
-    // ─── setSchedule(address outputToken, u256 swapAmount, u256 intervalBlocks) ─
+    // ─── setSchedule(address outputToken, u256 swapAmount, u256 intervalBlocks)
     @method(
         { name: 'outputToken', type: ABIDataTypes.ADDRESS },
         { name: 'swapAmount', type: ABIDataTypes.UINT256 },
@@ -138,36 +148,32 @@ export class DCAVault extends OP_NET {
         assert(u256.gt(swapAmount, u256.Zero), 'Swap amount must be > 0');
         assert(u256.ge(intervalBlocks, u256.fromU64(6)), 'Interval must be >= 6 blocks');
 
-        const balance = this._getUserBalance(user);
+        const balance = u256Stor(3, user).value;
         assert(u256.ge(balance, swapAmount), 'Balance < swap amount');
 
-        const wasActive = this._getUserIsActive(user);
+        const isActiveStor = boolStor(8, user);
+        const wasActive = isActiveStor.value;
 
-        this._setUserOutputToken(user, outputToken);
-        this._setUserSwapAmount(user, swapAmount);
-        this._setUserInterval(user, intervalBlocks);
-        this._setUserLastExecuted(user, Blockchain.blockNumber);
-        this._setUserIsActive(user, true);
+        addrStor(2, user).set(outputToken);
+        u256Stor(4, user).set(swapAmount);
+        u256Stor(5, user).set(intervalBlocks);
+        u256Stor(6, user).set(Blockchain.block.numberU256);
+        isActiveStor.set(true);
 
         if (!wasActive) {
-            this._totalActiveSchedules.value = u256.add(this._totalActiveSchedules.value, u256.One);
+            const tas = globalU256(202);
+            tas.set(u256.add(tas.value, u256.One));
         }
 
-        this.emitEvent(new ScheduleActivatedEvent(
-            user,
-            this._getUserInputToken(user),
-            outputToken,
-            balance,
-            swapAmount,
-            intervalBlocks,
-        ));
+        const inputToken = addrStor(1, user).value;
+        this.emitEvent(new ScheduleActivatedEvent(user, inputToken, outputToken, balance, swapAmount, intervalBlocks));
 
         const writer = new BytesWriter(BOOLEAN_BYTE_LENGTH);
         writer.writeBoolean(true);
         return writer;
     }
 
-    // ─── executeSwap(address user) ────────────────────────────────────────────
+    // ─── executeSwap(address targetUser) ─────────────────────────────────────
     @method(
         { name: 'targetUser', type: ABIDataTypes.ADDRESS },
     )
@@ -180,43 +186,46 @@ export class DCAVault extends OP_NET {
         const targetUser: Address = calldata.readAddress();
         const executor: Address = Blockchain.tx.sender;
 
-        assert(this._getUserIsActive(targetUser), 'Schedule not active');
+        const isActiveStor = boolStor(8, targetUser);
+        assert(isActiveStor.value, 'Schedule not active');
 
-        const lastBlock = this._getUserLastExecuted(targetUser);
-        const interval = this._getUserInterval(targetUser);
-        const currentBlock = Blockchain.blockNumber;
+        const lastBlock = u256Stor(6, targetUser).value;
+        const interval = u256Stor(5, targetUser).value;
+        const currentBlock = Blockchain.block.numberU256;
 
         assert(u256.ge(currentBlock, u256.add(lastBlock, interval)), 'Interval not elapsed');
 
-        const balance = this._getUserBalance(targetUser);
-        const swapAmount = this._getUserSwapAmount(targetUser);
+        const balStor = u256Stor(3, targetUser);
+        const balance = balStor.value;
+        const swapAmount = u256Stor(4, targetUser).value;
 
         assert(u256.ge(balance, swapAmount), 'Insufficient balance');
 
-        const keeperFee: u256 = u256.div(
-            u256.mul(swapAmount, u256.fromU64(KEEPER_FEE_BPS)),
-            u256.fromU64(10000),
-        );
-        const netSwapAmount: u256 = u256.sub(swapAmount, keeperFee);
+        const keeperFee = u256.div(u256.mul(swapAmount, u256.fromU64(KEEPER_FEE_BPS)), u256.fromU64(10000));
+        const netSwapAmount = u256.sub(swapAmount, keeperFee);
 
         const newBalance = u256.sub(balance, swapAmount);
-        this._setUserBalance(targetUser, newBalance);
+        balStor.set(newBalance);
 
         if (u256.lt(newBalance, swapAmount)) {
-            this._setUserIsActive(targetUser, false);
-            if (u256.gt(this._totalActiveSchedules.value, u256.Zero)) {
-                this._totalActiveSchedules.value = u256.sub(this._totalActiveSchedules.value, u256.One);
+            isActiveStor.set(false);
+            const tas = globalU256(202);
+            const total = tas.value;
+            if (u256.gt(total, u256.Zero)) {
+                tas.set(u256.sub(total, u256.One));
             }
         }
 
-        this._setUserLastExecuted(targetUser, currentBlock);
-        this._totalSwapsExecuted.value = u256.add(this._totalSwapsExecuted.value, u256.One);
+        u256Stor(6, targetUser).set(currentBlock);
 
-        const prevBought = this._getUserTotalBought(targetUser);
-        this._setUserTotalBought(targetUser, u256.add(prevBought, netSwapAmount));
+        const tse = globalU256(201);
+        tse.set(u256.add(tse.value, u256.One));
+
+        const boughtStor = u256Stor(7, targetUser);
+        boughtStor.set(u256.add(boughtStor.value, netSwapAmount));
 
         if (u256.gt(keeperFee, u256.Zero)) {
-            const inputToken = this._getUserInputToken(targetUser);
+            const inputToken = addrStor(1, targetUser).value;
             this._transfer(inputToken, executor, keeperFee);
         }
 
@@ -235,18 +244,21 @@ export class DCAVault extends OP_NET {
     public cancelSchedule(_calldata: Calldata): BytesWriter {
         const user: Address = Blockchain.tx.sender;
 
-        const wasActive = this._getUserIsActive(user);
-        if (wasActive) {
-            this._setUserIsActive(user, false);
-            if (u256.gt(this._totalActiveSchedules.value, u256.Zero)) {
-                this._totalActiveSchedules.value = u256.sub(this._totalActiveSchedules.value, u256.One);
+        const isActiveStor = boolStor(8, user);
+        if (isActiveStor.value) {
+            isActiveStor.set(false);
+            const tas = globalU256(202);
+            const total = tas.value;
+            if (u256.gt(total, u256.Zero)) {
+                tas.set(u256.sub(total, u256.One));
             }
         }
 
-        const refund = this._getUserBalance(user);
+        const balStor = u256Stor(3, user);
+        const refund = balStor.value;
         if (u256.gt(refund, u256.Zero)) {
-            const inputToken = this._getUserInputToken(user);
-            this._setUserBalance(user, u256.Zero);
+            const inputToken = addrStor(1, user).value;
+            balStor.set(u256.Zero);
             this._transfer(inputToken, user, refund);
         }
 
@@ -267,22 +279,25 @@ export class DCAVault extends OP_NET {
         const user: Address = Blockchain.tx.sender;
         const amount: u256 = calldata.readU256();
 
-        const balance = this._getUserBalance(user);
+        const balStor = u256Stor(3, user);
+        const balance = balStor.value;
         assert(u256.ge(balance, amount), 'Insufficient balance');
 
         const remaining = u256.sub(balance, amount);
-        const swapAmount = this._getUserSwapAmount(user);
+        const swapAmount = u256Stor(4, user).value;
+        balStor.set(remaining);
 
-        this._setUserBalance(user, remaining);
-
-        if (u256.lt(remaining, swapAmount) && this._getUserIsActive(user)) {
-            this._setUserIsActive(user, false);
-            if (u256.gt(this._totalActiveSchedules.value, u256.Zero)) {
-                this._totalActiveSchedules.value = u256.sub(this._totalActiveSchedules.value, u256.One);
+        const isActiveStor = boolStor(8, user);
+        if (u256.lt(remaining, swapAmount) && isActiveStor.value) {
+            isActiveStor.set(false);
+            const tas = globalU256(202);
+            const total = tas.value;
+            if (u256.gt(total, u256.Zero)) {
+                tas.set(u256.sub(total, u256.One));
             }
         }
 
-        const inputToken = this._getUserInputToken(user);
+        const inputToken = addrStor(1, user).value;
         this._transfer(inputToken, user, amount);
 
         this.emitEvent(new WithdrawEvent(user, inputToken, amount));
@@ -292,7 +307,7 @@ export class DCAVault extends OP_NET {
         return writer;
     }
 
-    // ─── getSchedule(address user) — view ────────────────────────────────────
+    // ─── getSchedule(address user) ────────────────────────────────────────────
     @method(
         { name: 'user', type: ABIDataTypes.ADDRESS },
     )
@@ -309,23 +324,19 @@ export class DCAVault extends OP_NET {
     public getSchedule(calldata: Calldata): BytesWriter {
         const user: Address = calldata.readAddress();
 
-        const writer = new BytesWriter(
-            ADDRESS_BYTE_LENGTH * 2 +
-            U256_BYTE_LENGTH * 5 +
-            BOOLEAN_BYTE_LENGTH,
-        );
-        writer.writeAddress(this._getUserInputToken(user));
-        writer.writeAddress(this._getUserOutputToken(user));
-        writer.writeU256(this._getUserBalance(user));
-        writer.writeU256(this._getUserSwapAmount(user));
-        writer.writeU256(this._getUserInterval(user));
-        writer.writeU256(this._getUserLastExecuted(user));
-        writer.writeU256(this._getUserTotalBought(user));
-        writer.writeBoolean(this._getUserIsActive(user));
+        const writer = new BytesWriter(ADDRESS_BYTE_LENGTH * 2 + U256_BYTE_LENGTH * 5 + BOOLEAN_BYTE_LENGTH);
+        writer.writeAddress(addrStor(1, user).value);
+        writer.writeAddress(addrStor(2, user).value);
+        writer.writeU256(u256Stor(3, user).value);
+        writer.writeU256(u256Stor(4, user).value);
+        writer.writeU256(u256Stor(5, user).value);
+        writer.writeU256(u256Stor(6, user).value);
+        writer.writeU256(u256Stor(7, user).value);
+        writer.writeBoolean(boolStor(8, user).value);
         return writer;
     }
 
-    // ─── getGlobalStats() — view ──────────────────────────────────────────────
+    // ─── getGlobalStats() ────────────────────────────────────────────────────
     @method()
     @returns(
         { name: 'totalDeposited', type: ABIDataTypes.UINT256 },
@@ -334,13 +345,13 @@ export class DCAVault extends OP_NET {
     )
     public getGlobalStats(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(U256_BYTE_LENGTH * 3);
-        writer.writeU256(this._totalDeposited.value);
-        writer.writeU256(this._totalSwapsExecuted.value);
-        writer.writeU256(this._totalActiveSchedules.value);
+        writer.writeU256(globalU256(200).value);
+        writer.writeU256(globalU256(201).value);
+        writer.writeU256(globalU256(202).value);
         return writer;
     }
 
-    // ─── canExecute(address user) — view ─────────────────────────────────────
+    // ─── canExecute(address user) ─────────────────────────────────────────────
     @method(
         { name: 'user', type: ABIDataTypes.ADDRESS },
     )
@@ -351,10 +362,10 @@ export class DCAVault extends OP_NET {
     public canExecute(calldata: Calldata): BytesWriter {
         const user: Address = calldata.readAddress();
 
-        const isActive = this._getUserIsActive(user);
-        const lastBlock = this._getUserLastExecuted(user);
-        const interval = this._getUserInterval(user);
-        const currentBlock = Blockchain.blockNumber;
+        const isActive = boolStor(8, user).value;
+        const lastBlock = u256Stor(6, user).value;
+        const interval = u256Stor(5, user).value;
+        const currentBlock = Blockchain.block.numberU256;
 
         let canExec: bool = false;
         let blocksUntil: u256 = u256.Zero;
@@ -377,81 +388,17 @@ export class DCAVault extends OP_NET {
     // ─── Cross-contract helpers ───────────────────────────────────────────────
 
     private _transferFrom(token: Address, from: Address, to: Address, amount: u256): void {
-        const payload = new BytesWriter(4 + ADDRESS_BYTE_LENGTH * 2 + U256_BYTE_LENGTH);
-        payload.writeSelector('transferFrom(address,address,uint256)');
-        payload.writeAddress(from);
-        payload.writeAddress(to);
-        payload.writeU256(amount);
-        Blockchain.call(token, payload);
+        const data = new BytesWriter(ADDRESS_BYTE_LENGTH * 2 + U256_BYTE_LENGTH);
+        data.writeAddress(from);
+        data.writeAddress(to);
+        data.writeU256(amount);
+        Blockchain.call(token, encodeSelector('transferFrom(address,address,uint256)'), data);
     }
 
     private _transfer(token: Address, to: Address, amount: u256): void {
-        const payload = new BytesWriter(4 + ADDRESS_BYTE_LENGTH + U256_BYTE_LENGTH);
-        payload.writeSelector('transfer(address,uint256)');
-        payload.writeAddress(to);
-        payload.writeU256(amount);
-        Blockchain.call(token, payload);
-    }
-
-    // ─── Per-user storage helpers ─────────────────────────────────────────────
-
-    private _addrKey(user: Address): u256 {
-        return u256.fromBytes(user.toBytes(), true);
-    }
-
-    private _getUserBalance(user: Address): u256 {
-        return new StoredU256(3, this._addrKey(user)).value;
-    }
-    private _setUserBalance(user: Address, val: u256): void {
-        new StoredU256(3, this._addrKey(user)).value = val;
-    }
-
-    private _getUserInputToken(user: Address): Address {
-        return new StoredAddress(1, this._addrKey(user)).value;
-    }
-    private _setUserInputToken(user: Address, token: Address): void {
-        new StoredAddress(1, this._addrKey(user)).value = token;
-    }
-
-    private _getUserOutputToken(user: Address): Address {
-        return new StoredAddress(2, this._addrKey(user)).value;
-    }
-    private _setUserOutputToken(user: Address, token: Address): void {
-        new StoredAddress(2, this._addrKey(user)).value = token;
-    }
-
-    private _getUserSwapAmount(user: Address): u256 {
-        return new StoredU256(4, this._addrKey(user)).value;
-    }
-    private _setUserSwapAmount(user: Address, val: u256): void {
-        new StoredU256(4, this._addrKey(user)).value = val;
-    }
-
-    private _getUserInterval(user: Address): u256 {
-        return new StoredU256(5, this._addrKey(user)).value;
-    }
-    private _setUserInterval(user: Address, val: u256): void {
-        new StoredU256(5, this._addrKey(user)).value = val;
-    }
-
-    private _getUserLastExecuted(user: Address): u256 {
-        return new StoredU256(6, this._addrKey(user)).value;
-    }
-    private _setUserLastExecuted(user: Address, val: u256): void {
-        new StoredU256(6, this._addrKey(user)).value = val;
-    }
-
-    private _getUserTotalBought(user: Address): u256 {
-        return new StoredU256(7, this._addrKey(user)).value;
-    }
-    private _setUserTotalBought(user: Address, val: u256): void {
-        new StoredU256(7, this._addrKey(user)).value = val;
-    }
-
-    private _getUserIsActive(user: Address): bool {
-        return new StoredBoolean(8, this._addrKey(user)).value;
-    }
-    private _setUserIsActive(user: Address, val: bool): void {
-        new StoredBoolean(8, this._addrKey(user)).value = val;
+        const data = new BytesWriter(ADDRESS_BYTE_LENGTH + U256_BYTE_LENGTH);
+        data.writeAddress(to);
+        data.writeU256(amount);
+        Blockchain.call(token, encodeSelector('transfer(address,uint256)'), data);
     }
 }
