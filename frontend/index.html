@@ -379,6 +379,36 @@ document.getElementById('targetToken').addEventListener('change', function() {
   document.getElementById('customAddrGroup').style.display = this.value === 'custom' ? 'block' : 'none';
 });
 
+// Encode function call for OP_NET contract
+function encodeContractCall(functionSelector, params) {
+  let encoded = functionSelector;
+  
+  // Encode each parameter as 256-bit (32 bytes) hex
+  params.forEach(param => {
+    if (typeof param === 'string') {
+      // Address - remove 0x and pad to 64 chars
+      encoded += param.replace('0x', '').padStart(64, '0');
+    } else if (typeof param === 'number' || typeof param === 'bigint') {
+      // Number - convert to hex and pad
+      encoded += BigInt(param).toString(16).padStart(64, '0');
+    }
+  });
+  
+  return '0x' + encoded;
+}
+
+// setSchedule(address outputToken, uint256 swapAmount, uint256 intervalBlocks)
+// Selector: 0x6a07e23c
+function encodeSetSchedule(outputToken, swapAmount, intervalBlocks) {
+  return encodeContractCall('6a07e23c', [outputToken, swapAmount, intervalBlocks]);
+}
+
+// deposit(address inputToken, uint256 amount)
+// Selector: 0x172c80c9
+function encodeDeposit(inputToken, amount) {
+  return encodeContractCall('172c80c9', [inputToken, amount]);
+}
+
 async function createSchedule() {
   if (!connected) { showToast('Connect wallet first', true); return; }
   const deposit = parseFloat(document.getElementById('depositAmount').value);
@@ -387,34 +417,52 @@ async function createSchedule() {
   if (swapAmt > deposit) { showToast('Swap > deposit', true); return; }
   
   const btn = document.getElementById('createBtn');
-  btn.textContent = 'REQUESTING SIGNATURE...';
+  btn.textContent = 'BROADCASTING TX...';
   btn.disabled = true;
 
   try {
-    const message = `SATS.DCA Schedule\nDeposit: ${deposit} MOTO\nPer Swap: ${swapAmt} MOTO\nInterval: ${intervalBlocksVal} blocks`;
+    // Target token (MOTO example address)
+    const outputToken = '0x0000000000000000000000000000000000000001';
     
-    console.log('Signing message:', message);
+    // Encode the setSchedule call
+    const data = encodeSetSchedule(
+      outputToken,
+      Math.floor(swapAmt * 1e18), // Convert to wei (18 decimals)
+      intervalBlocksVal
+    );
     
-    // Используем signMessage - это откроет кошелек
-    const signature = await window.opnet.signMessage(message);
+    console.log('Sending transaction to:', CONTRACT_ADDRESS);
+    console.log('Data:', data);
     
-    console.log('Signature received:', signature);
-    showToast('✓ Schedule activated!');
+    // Send transaction using OP_WALLET
+    const txHash = await window.opnet.signAndBroadcastInteraction({
+      to: CONTRACT_ADDRESS,
+      data: data,
+      value: '0'
+    });
     
-    scheduleActive = true;
-    scheduleData = { 
-      balance: deposit, 
-      swapSize: swapAmt, 
-      interval: intervalBlocksVal, 
-      lastBlock: simBlock, 
-      totalBought: 0 
-    };
-    updateScheduleUI();
+    console.log('Transaction sent:', txHash);
+    showToast('Tx: ' + txHash.slice(0, 16) + '...');
+    
+    // Wait a bit then show success
+    setTimeout(() => {
+      scheduleActive = true;
+      scheduleData = { 
+        balance: deposit, 
+        swapSize: swapAmt, 
+        interval: intervalBlocksVal, 
+        lastBlock: simBlock, 
+        totalBought: 0 
+      };
+      updateScheduleUI();
+      showToast('✓ Schedule activated!');
+      btn.textContent = 'ACTIVATE SCHEDULE';
+      btn.disabled = false;
+    }, 2000);
     
   } catch (err) {
     console.error('Error:', err);
-    showToast('Cancelled: ' + err.message, true);
-  } finally {
+    showToast('Error: ' + err.message, true);
     btn.textContent = 'ACTIVATE SCHEDULE';
     btn.disabled = false;
   }
