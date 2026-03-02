@@ -1,5 +1,4 @@
 {
-  "extends": "@btc-vision/btc-runtime/asconfig.json",
   "targets": {
     "release": {
       "outFile": "build/DCAVault.wasm",
