@@ -391,28 +391,30 @@ async function createSchedule() {
   btn.disabled = true;
 
   try {
-    // Просим кошелек подписать сообщение (это откроет кошелек)
-    const message = `Create DCA Schedule\nDeposit: ${deposit} MOTO\nSwap: ${swapAmt} MOTO\nInterval: ${intervalBlocksVal} blocks\nContract: ${CONTRACT_ADDRESS}`;
+    const message = `SATS.DCA Schedule\nDeposit: ${deposit} MOTO\nPer Swap: ${swapAmt} MOTO\nInterval: ${intervalBlocksVal} blocks`;
     
-    console.log('Requesting signature for:', message);
+    console.log('Signing message:', message);
     
-    const signature = await window.opnet.request({
-      method: 'personal_sign',
-      params: [message, walletAddress]
-    });
+    // Используем signMessage - это откроет кошелек
+    const signature = await window.opnet.signMessage(message);
     
-    console.log('Signature:', signature);
-    showToast('✓ Signed! Schedule activated!');
+    console.log('Signature received:', signature);
+    showToast('✓ Schedule activated!');
     
     scheduleActive = true;
-    scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
+    scheduleData = { 
+      balance: deposit, 
+      swapSize: swapAmt, 
+      interval: intervalBlocksVal, 
+      lastBlock: simBlock, 
+      totalBought: 0 
+    };
     updateScheduleUI();
-    btn.textContent = 'ACTIVATE SCHEDULE';
-    btn.disabled = false;
     
   } catch (err) {
     console.error('Error:', err);
-    showToast('Cancelled or error: ' + err.message, true);
+    showToast('Cancelled: ' + err.message, true);
+  } finally {
     btn.textContent = 'ACTIVATE SCHEDULE';
     btn.disabled = false;
   }
