@@ -285,14 +285,22 @@ async function toggleConnect() {
     document.getElementById('connectBtn').classList.remove('connected');
     return;
   }
-  if (!window.ethereum && !window.opnet) {
+  
+  let provider = window.opnet || window.ethereum;
+  
+  if (!provider) {
     showToast('Wallet not found', true);
     return;
   }
+  
   try {
     document.getElementById('connectBtn').textContent = 'CONNECTING...';
-    const provider = window.ethereum || window.opnet;
+    console.log('Provider:', provider);
+    console.log('Requesting accounts...');
+    
     const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    console.log('Accounts received:', accounts);
+    
     if (accounts && accounts.length > 0) {
       connected = true;
       walletAddress = accounts[0];
@@ -301,10 +309,13 @@ async function toggleConnect() {
       document.getElementById('connectBtn').classList.add('connected');
       showToast('Connected: ' + short);
       loadMockHistory();
+    } else {
+      showToast('No accounts found', true);
     }
   } catch (err) {
+    console.error('Connection error:', err);
     document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
-    showToast('Connection failed', true);
+    showToast('Error: ' + err.message, true);
   }
 }
 
