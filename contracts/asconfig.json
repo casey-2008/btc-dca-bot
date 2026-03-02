@@ -2,22 +2,28 @@
   "targets": {
     "release": {
       "outFile": "build/DCAVault.wasm",
-      "textFile": "build/DCAVault.wat",
-      "sourceMap": false,
-      "optimizeLevel": 3,
-      "shrinkLevel": 1,
-      "converge": false,
-      "noAssert": false
-    },
-    "debug": {
-      "outFile": "build/DCAVault.wasm",
-      "textFile": "build/DCAVault.wat",
-      "sourceMap": true,
-      "debug": true
+      "use": ["abort=src/index/abort"]
     }
   },
   "options": {
-    "bindings": "esm",
-    "lib": "node_modules/@btc-vision/btc-runtime/runtime"
+    "sourceMap": false,
+    "optimizeLevel": 3,
+    "shrinkLevel": 1,
+    "converge": true,
+    "noAssert": false,
+    "enable": [
+      "sign-extension",
+      "mutable-globals",
+      "nontrapping-f2i",
+      "bulk-memory",
+      "simd",
+      "reference-types",
+      "multi-value"
+    ],
+    "runtime": "stub",
+    "memoryBase": 0,
+    "initialMemory": 1,
+    "exportStart": "start",
+    "transform": "@btc-vision/opnet-transform"
   }
 }
