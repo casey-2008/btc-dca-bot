@@ -1,0 +1,18 @@
+{
+  "name": "btc-dca-bot-contracts",
+  "version": "1.0.0",
+  "description": "On-chain Bitcoin DCA Bot smart contracts for OP_NET",
+  "scripts": {
+    "build": "npx asc src/index.ts --target release --outFile build/DCAVault.wasm --textFile build/DCAVault.wat --sourceMap --optimize",
+    "build:debug": "npx asc src/index.ts --target debug --outFile build/DCAVault.debug.wasm",
+    "test": "npx asp --config as-pect.config.js"
+  },
+  "dependencies": {
+    "@btc-vision/btc-runtime": "^latest",
+    "as-bignum": "^latest"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.0",
+    "@as-pect/cli": "^8.0.0"
+  }
+}
