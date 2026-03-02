@@ -286,20 +286,34 @@ async function toggleConnect() {
     return;
   }
   
-  let provider = window.opnet || window.ethereum;
+  let provider = window.opnet;
   
   if (!provider) {
-    showToast('Wallet not found', true);
+    showToast('OP_WALLET not found', true);
     return;
   }
   
   try {
     document.getElementById('connectBtn').textContent = 'CONNECTING...';
     console.log('Provider:', provider);
-    console.log('Requesting accounts...');
     
-    const accounts = await provider.request({ method: 'eth_requestAccounts' });
-    console.log('Accounts received:', accounts);
+    // OP_WALLET использует другой API
+    let accounts;
+    
+    if (provider.requestAccounts) {
+      // Новый API
+      accounts = await provider.requestAccounts();
+      console.log('Accounts (new API):', accounts);
+    } else if (provider.request) {
+      // Старый API
+      accounts = await provider.request({ method: 'eth_requestAccounts' });
+      console.log('Accounts (old API):', accounts);
+    } else {
+      console.log('Provider methods:', Object.keys(provider));
+      showToast('Unknown wallet API', true);
+      document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
+      return;
+    }
     
     if (accounts && accounts.length > 0) {
       connected = true;
