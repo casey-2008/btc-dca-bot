@@ -1,18 +1,17 @@
 {
-  "name": "btc-dca-bot-contracts",
+  "name": "sats-dca-contract",
   "version": "1.0.0",
-  "description": "On-chain Bitcoin DCA Bot smart contracts for OP_NET",
+  "description": "SATS.DCA — On-Chain Dollar Cost Averaging vault on Bitcoin L1 via OP_NET",
+  "main": "index.js",
   "scripts": {
-    "build": "npx asc src/index.ts --target release --outFile build/DCAVault.wasm --textFile build/DCAVault.wat --sourceMap --optimize",
-    "build:debug": "npx asc src/index.ts --target debug --outFile build/DCAVault.debug.wasm",
-    "test": "npx asp --config as-pect.config.js"
+    "build": "asc src/index.ts --config asconfig.json --outFile build/DCAVault.wasm --textFile build/DCAVault.wat",
+    "build:release": "asc src/index.ts --config asconfig.json --outFile build/DCAVault.wasm --textFile build/DCAVault.wat --optimize"
   },
   "dependencies": {
-    "@btc-vision/btc-runtime": "^latest",
-    "as-bignum": "^latest"
+    "@btc-vision/btc-runtime": "latest",
+    "as-bignum": "latest"
   },
   "devDependencies": {
-    "assemblyscript": "^0.27.0",
-    "@as-pect/cli": "^8.0.0"
+    "assemblyscript": "latest"
   }
 }
