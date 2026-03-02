@@ -15,7 +15,7 @@ const CONTRACT_ADDRESS    = 'YOUR_DEPLOYED_CONTRACT_ADDRESS'; // replace after d
 // ─── ABI ─────────────────────────────────────────────────────────────────────
 const DCA_ABI = [
     { name: 'deposit',         inputs: [{ name: 'amount',         type: 'uint256' }] },
-    { name: 'createSchedule',  inputs: [{ name: 'intervalBlocks', type: 'uint256' }, { name: 'amountPerSwap', type: 'uint256' }] },
+    { name: 'setSchedule', inputs: [{ name: 'outputToken', type: 'address' }, { name: 'swapAmount', type: 'uint256' }, { name: 'intervalBlocks', type: 'uint256' }] },
     { name: 'executeSwap',     inputs: [{ name: 'target',         type: 'address' }] },
     { name: 'cancelSchedule',  inputs: [] },
     { name: 'withdraw',        inputs: [{ name: 'amount',         type: 'uint256' }] },
