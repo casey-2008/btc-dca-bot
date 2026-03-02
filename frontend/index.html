@@ -385,17 +385,63 @@ async function createSchedule() {
   const swapAmt = parseFloat(document.getElementById('swapAmount').value);
   if (!deposit || !swapAmt) { showToast('Fill in amounts', true); return; }
   if (swapAmt > deposit) { showToast('Swap > deposit', true); return; }
+  
   const btn = document.getElementById('createBtn');
   btn.textContent = 'BROADCASTING...';
   btn.disabled = true;
-  setTimeout(() => {
-    scheduleActive = true;
-    scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
-    updateScheduleUI();
+
+  try {
+    console.log('Creating schedule:', { walletAddress, deposit, swapAmt, intervalBlocksVal });
+    
+    // Отправляем JSON-RPC запрос к контракту
+    const response = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_sendTransaction',
+        params: [{
+          from: walletAddress,
+          to: CONTRACT_ADDRESS,
+          value: '0x0',
+          data: '0x6a07e23c' + 
+            '0'.repeat(64) + // outputToken (placeholder)
+            swapAmt.toString().padStart(64, '0') + // swapAmount
+            intervalBlocksVal.toString().padStart(64, '0') // intervalBlocks
+        }]
+      })
+    });
+
+    const data = await response.json();
+    console.log('Response:', data);
+    
+    if (data.error) {
+      showToast('Error: ' + data.error.message, true);
+      btn.textContent = 'ACTIVATE SCHEDULE';
+      btn.disabled = false;
+      return;
+    }
+
+    const txHash = data.result;
+    showToast('Tx sent: ' + txHash.slice(0, 10) + '...');
+    
+    // Имитируем подтверждение
+    setTimeout(() => {
+      scheduleActive = true;
+      scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
+      updateScheduleUI();
+      btn.textContent = 'ACTIVATE SCHEDULE';
+      btn.disabled = false;
+      showToast('✓ Schedule activated!');
+    }, 2000);
+    
+  } catch (err) {
+    console.error('Error:', err);
+    showToast('Error: ' + err.message, true);
     btn.textContent = 'ACTIVATE SCHEDULE';
     btn.disabled = false;
-    showToast('✓ Schedule activated!');
-  }, 1800);
+  }
 }
 
 function cancelSchedule() {
