@@ -380,21 +380,45 @@ document.getElementById('targetToken').addEventListener('change', function() {
 });
 
 // Encode function call for OP_NET contract
+// Encode function call for OP_NET contract
 function encodeContractCall(functionSelector, params) {
   let encoded = functionSelector;
   
+  if (!params || params.length === 0) {
+    return '0x' + encoded;
+  }
+  
   // Encode each parameter as 256-bit (32 bytes) hex
   params.forEach(param => {
-    if (typeof param === 'string') {
-      // Address - remove 0x and pad to 64 chars
-      encoded += param.replace('0x', '').padStart(64, '0');
-    } else if (typeof param === 'number' || typeof param === 'bigint') {
-      // Number - convert to hex and pad
-      encoded += BigInt(param).toString(16).padStart(64, '0');
+    try {
+      if (typeof param === 'string') {
+        // Address - remove 0x and pad to 64 chars
+        let hex = param.replace('0x', '');
+        encoded += hex.padStart(64, '0');
+      } else if (typeof param === 'number' || typeof param === 'bigint') {
+        // Number - convert to hex and pad
+        let hex = BigInt(param).toString(16);
+        encoded += hex.padStart(64, '0');
+      } else {
+        console.warn('Unknown param type:', typeof param, param);
+      }
+    } catch (e) {
+      console.error('Error encoding param:', param, e);
     }
   });
   
   return '0x' + encoded;
+}
+
+// setSchedule(address outputToken, uint256 swapAmount, uint256 intervalBlocks)
+// Selector: 0x6a07e23c
+function encodeSetSchedule(outputToken, swapAmount, intervalBlocks) {
+  const params = [
+    outputToken || '0x0000000000000000000000000000000000000001',
+    swapAmount,
+    intervalBlocks
+  ];
+  return encodeContractCall('6a07e23c', params);
 }
 
 // setSchedule(address outputToken, uint256 swapAmount, uint256 intervalBlocks)
@@ -421,39 +445,26 @@ async function createSchedule() {
   btn.disabled = true;
 
   try {
-    // Target token (MOTO example address)
     const outputToken = '0x0000000000000000000000000000000000000001';
+    const swapAmount = Math.floor(swapAmt * 1e18);
     
-    // Encode the setSchedule call
-    const data = encodeSetSchedule(
-      outputToken,
-      Math.floor(swapAmt * 1e18), // Convert to wei (18 decimals)
-      intervalBlocksVal
-    );
+    const data = encodeSetSchedule(outputToken, swapAmount, intervalBlocksVal);
     
-    console.log('Sending transaction to:', CONTRACT_ADDRESS);
+    console.log('Contract:', CONTRACT_ADDRESS);
     console.log('Data:', data);
     
-    // Send transaction using OP_WALLET
     const txHash = await window.opnet.signAndBroadcastInteraction({
       to: CONTRACT_ADDRESS,
       data: data,
       value: '0'
     });
     
-    console.log('Transaction sent:', txHash);
-    showToast('Tx: ' + txHash.slice(0, 16) + '...');
+    console.log('Tx:', txHash);
+    showToast('Tx sent: ' + txHash.slice(0, 16) + '...');
     
-    // Wait a bit then show success
     setTimeout(() => {
       scheduleActive = true;
-      scheduleData = { 
-        balance: deposit, 
-        swapSize: swapAmt, 
-        interval: intervalBlocksVal, 
-        lastBlock: simBlock, 
-        totalBought: 0 
-      };
+      scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
       updateScheduleUI();
       showToast('✓ Schedule activated!');
       btn.textContent = 'ACTIVATE SCHEDULE';
@@ -462,7 +473,7 @@ async function createSchedule() {
     
   } catch (err) {
     console.error('Error:', err);
-    showToast('Error: ' + err.message, true);
+    showToast('Error: ' + (err.message || err), true);
     btn.textContent = 'ACTIVATE SCHEDULE';
     btn.disabled = false;
   }
