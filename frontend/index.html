@@ -124,10 +124,10 @@ footer { border-top: 1px solid var(--border); padding: 20px 40px; text-align: ce
       <div class="form-group">
         <label class="form-label">Interval</label>
         <div class="interval-presets">
-          <button class="preset-btn" onclick="setInterval(6, this)">~1H</button>
-          <button class="preset-btn active" onclick="setInterval(144, this)">~1D</button>
-          <button class="preset-btn" onclick="setInterval(1008, this)">~1W</button>
-          <button class="preset-btn" onclick="setInterval(4320, this)">~1M</button>
+          <button class="preset-btn" onclick="setDCAInterval(6, this)">~1H</button>
+          <button class="preset-btn active" onclick="setDCAInterval(144, this)">~1D</button>
+          <button class="preset-btn" onclick="setDCAInterval(1008, this)">~1W</button>
+          <button class="preset-btn" onclick="setDCAInterval(4320, this)">~1M</button>
         </div>
         <input type="hidden" id="intervalBlocks" value="144">
       </div>
@@ -283,7 +283,7 @@ async function toggleConnect() {
 }
 
 // Interval
-function setInterval(blocks, btn) {
+function setDCAInterval(blocks, btn) {
   intervalBlocksVal = blocks;
   document.getElementById('intervalBlocks').value = blocks;
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
