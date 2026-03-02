@@ -1,0 +1,23 @@
+{
+  "extends": "@btc-vision/btc-runtime/asconfig.json",
+  "targets": {
+    "release": {
+      "outFile": "build/DCAVault.wasm",
+      "textFile": "build/DCAVault.wat",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": false,
+      "noAssert": false
+    },
+    "debug": {
+      "outFile": "build/DCAVault.wasm",
+      "textFile": "build/DCAVault.wat",
+      "sourceMap": true,
+      "debug": true
+    }
+  },
+  "options": {
+    "bindings": "esm"
+  }
+}
