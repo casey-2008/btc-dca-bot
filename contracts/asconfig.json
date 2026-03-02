@@ -17,6 +17,7 @@
     }
   },
   "options": {
-    "bindings": "esm"
+    "bindings": "esm",
+    "lib": "node_modules/@btc-vision/btc-runtime/runtime"
   }
 }
