@@ -4,8 +4,7 @@
   "description": "SATS.DCA — On-Chain Dollar Cost Averaging vault on Bitcoin L1 via OP_NET",
   "main": "index.js",
   "scripts": {
-    "build": "asc src/index.ts --config asconfig.json --outFile build/DCAVault.wasm --textFile build/DCAVault.wat",
-    "build:release": "asc src/index.ts --config asconfig.json --outFile build/DCAVault.wasm --textFile build/DCAVault.wat --optimize"
+    "build": "asc src/index.ts --target release --config asconfig.json --uncheckedBehavior never"
   },
   "dependencies": {
     "@btc-vision/btc-runtime": "latest",
