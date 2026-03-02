@@ -942,22 +942,69 @@ setTimeout(() => {
   animateCounter(document.getElementById('statSchedules'), 93);
 }, 500);
 
-// ── Wallet connect ─────────────────────────────────────────────────────────────
-function toggleConnect() {
-  if (!connected) {
-    // Simulate OP_WALLET connection
-    connected = true;
-    walletAddress = 'bc1q...a7f3';
-    document.getElementById('connectBtn').textContent = walletAddress;
-    document.getElementById('connectBtn').classList.add('connected');
-    showToast('Wallet connected · ' + walletAddress);
-    loadMockHistory();
-  } else {
+// ── Wallet connect — real OP_WALLET integration ────────────────────────────────
+async function toggleConnect() {
+  if (connected) {
+    // Disconnect
     connected = false;
     walletAddress = null;
     document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
     document.getElementById('connectBtn').classList.remove('connected');
+    return;
   }
+
+  // Check if OP_WALLET is installed
+  const opwallet = window.opnet || window.unisat || window.bitcoin;
+
+  if (!opwallet) {
+    showToast('OP_WALLET not found! Install it from opnet.org', true);
+    setTimeout(() => {
+      window.open('https://chromewebstore.google.com/detail/opwallet/pmbjpcmaaladnfpacpmhmnfmpklgbdjb', '_blank');
+    }, 1500);
+    return;
+  }
+
+  try {
+    document.getElementById('connectBtn').textContent = 'CONNECTING...';
+
+    // Request accounts from OP_WALLET
+    const accounts = await opwallet.requestAccounts();
+
+    if (accounts && accounts.length > 0) {
+      connected = true;
+      walletAddress = accounts[0];
+
+      // Show shortened address
+      const short = walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+      document.getElementById('connectBtn').textContent = short;
+      document.getElementById('connectBtn').classList.add('connected');
+      showToast('Wallet connected · ' + short);
+      loadMockHistory();
+    }
+  } catch (err) {
+    document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
+    if (err.code === 4001) {
+      showToast('Connection rejected by user', true);
+    } else {
+      showToast('Connection failed: ' + (err.message || 'Unknown error'), true);
+    }
+  }
+}
+
+// Listen for account changes
+if (window.opnet) {
+  window.opnet.on('accountsChanged', (accounts) => {
+    if (accounts.length === 0) {
+      connected = false;
+      walletAddress = null;
+      document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
+      document.getElementById('connectBtn').classList.remove('connected');
+    } else {
+      walletAddress = accounts[0];
+      const short = walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+      document.getElementById('connectBtn').textContent = short;
+    }
+  });
 }
 
 // ── Interval presets ───────────────────────────────────────────────────────────
