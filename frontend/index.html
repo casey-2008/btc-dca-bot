@@ -412,13 +412,21 @@ function encodeContractCall(functionSelector, params) {
 
 // setSchedule(address outputToken, uint256 swapAmount, uint256 intervalBlocks)
 // Selector: 0x6a07e23c
+// Простое кодирование параметров для контракта
 function encodeSetSchedule(outputToken, swapAmount, intervalBlocks) {
-  const params = [
-    outputToken || '0x0000000000000000000000000000000000000001',
-    swapAmount,
-    intervalBlocks
-  ];
-  return encodeContractCall('6a07e23c', params);
+  // setSchedule selector: 0x6a07e23c
+  let data = '0x6a07e23c';
+  
+  // outputToken (address) - 32 bytes
+  data += (outputToken || '0x0000000000000000000000000000000000000001').replace('0x', '').padStart(64, '0');
+  
+  // swapAmount (uint256) - 32 bytes
+  data += swapAmount.toString(16).padStart(64, '0');
+  
+  // intervalBlocks (uint256) - 32 bytes
+  data += intervalBlocks.toString(16).padStart(64, '0');
+  
+  return data;
 }
 
 // setSchedule(address outputToken, uint256 swapAmount, uint256 intervalBlocks)
@@ -445,12 +453,13 @@ async function createSchedule() {
   btn.disabled = true;
 
   try {
-    const outputToken = '0x0000000000000000000000000000000000000001';
-    const swapAmount = Math.floor(swapAmt * 1e18);
+    const data = encodeSetSchedule(
+      '0x0000000000000000000000000000000000000001',
+      Math.floor(swapAmt * 1e18),
+      intervalBlocksVal
+    );
     
-    const data = encodeSetSchedule(outputToken, swapAmount, intervalBlocksVal);
-    
-    console.log('Contract:', CONTRACT_ADDRESS);
+    console.log('Sending to:', CONTRACT_ADDRESS);
     console.log('Data:', data);
     
     const txHash = await window.opnet.signAndBroadcastInteraction({
@@ -460,20 +469,16 @@ async function createSchedule() {
     });
     
     console.log('Tx:', txHash);
-    showToast('Tx sent: ' + txHash.slice(0, 16) + '...');
+    showToast('✓ Schedule activated!');
     
-    setTimeout(() => {
-      scheduleActive = true;
-      scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
-      updateScheduleUI();
-      showToast('✓ Schedule activated!');
-      btn.textContent = 'ACTIVATE SCHEDULE';
-      btn.disabled = false;
-    }, 2000);
+    scheduleActive = true;
+    scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
+    updateScheduleUI();
     
   } catch (err) {
     console.error('Error:', err);
-    showToast('Error: ' + (err.message || err), true);
+    showToast('Error: ' + err.message, true);
+  } finally {
     btn.textContent = 'ACTIVATE SCHEDULE';
     btn.disabled = false;
   }
