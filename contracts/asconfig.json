@@ -1,7 +1,7 @@
 {
   "targets": {
     "release": {
-      "outFile": "build/DCAVault.wasm",
+      "outFile": "build": "asc src/index.ts --target release --config asconfig.json --uncheckedBehavior never",
       "use": ["abort=src/index/abort"]
     }
   },
