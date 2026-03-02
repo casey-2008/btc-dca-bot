@@ -381,34 +381,6 @@ document.getElementById('targetToken').addEventListener('change', function() {
 
 // Encode function call for OP_NET contract
 // Encode function call for OP_NET contract
-function encodeContractCall(functionSelector, params) {
-  let encoded = functionSelector;
-  
-  if (!params || params.length === 0) {
-    return '0x' + encoded;
-  }
-  
-  // Encode each parameter as 256-bit (32 bytes) hex
-  params.forEach(param => {
-    try {
-      if (typeof param === 'string') {
-        // Address - remove 0x and pad to 64 chars
-        let hex = param.replace('0x', '');
-        encoded += hex.padStart(64, '0');
-      } else if (typeof param === 'number' || typeof param === 'bigint') {
-        // Number - convert to hex and pad
-        let hex = BigInt(param).toString(16);
-        encoded += hex.padStart(64, '0');
-      } else {
-        console.warn('Unknown param type:', typeof param, param);
-      }
-    } catch (e) {
-      console.error('Error encoding param:', param, e);
-    }
-  });
-  
-  return '0x' + encoded;
-}
 
 // setSchedule(address outputToken, uint256 swapAmount, uint256 intervalBlocks)
 // Selector: 0x6a07e23c
@@ -453,30 +425,20 @@ async function createSchedule() {
   btn.disabled = true;
 
   try {
-    const data = encodeSetSchedule(
-      '0x0000000000000000000000000000000000000001',
-      Math.floor(swapAmt * 1e18),
-      intervalBlocksVal
-    );
-    
-    console.log('Sending to:', CONTRACT_ADDRESS);
-    console.log('Data:', data);
-    
     const txHash = await window.opnet.signAndBroadcastInteraction({
       to: CONTRACT_ADDRESS,
-      data: data,
       value: '0'
     });
     
-    console.log('Tx:', txHash);
-    showToast('✓ Schedule activated!');
+    console.log('Tx hash:', txHash);
+    showToast('✓ Tx sent!');
     
     scheduleActive = true;
     scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
     updateScheduleUI();
     
   } catch (err) {
-    console.error('Error:', err);
+    console.error('Full error:', err);
     showToast('Error: ' + err.message, true);
   } finally {
     btn.textContent = 'ACTIVATE SCHEDULE';
