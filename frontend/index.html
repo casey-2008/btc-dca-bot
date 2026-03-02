@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SATS.DCA — On-Chain Bitcoin Dollar Cost Averaging</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --btc: #F7931A;
+    --btc-dim: rgba(247,147,26,0.12);
+    --btc-glow: rgba(247,147,26,0.35);
+    --bg: #080A07;
+    --surface: #0E110D;
+    --surface2: #141812;
+    --border: rgba(247,147,26,0.18);
+    --text: #E8EDE6;
+    --muted: #6B7568;
+    --green: #3DFF6E;
+    --red: #FF4545;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Grid bg ─────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(247,147,26,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(247,147,26,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── Noise overlay ───────────────────────────────── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  /* ─── Glow blob ───────────────────────────────────── */
+  .glow-blob {
+    position: fixed;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(247,147,26,0.07) 0%, transparent 70%);
+    top: -200px; right: -200px;
+    pointer-events: none;
+    z-index: 0;
+    animation: blobPulse 8s ease-in-out infinite;
+  }
+  @keyframes blobPulse {
+    0%,100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.2); opacity: 1; }
+  }
+
+  .page { position: relative; z-index: 1; }
+
+  /* ─── Header ──────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+    background: rgba(8,10,7,0.8);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 4px;
+    color: var(--btc);
+    text-shadow: 0 0 30px var(--btc-glow);
+  }
+  .logo span { color: var(--text); opacity: 0.5; }
+
+  .block-ticker {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .block-ticker .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .connect-btn {
+    background: transparent;
+    border: 1px solid var(--btc);
+    color: var(--btc);
+    padding: 8px 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .connect-btn:hover {
+    background: var(--btc-dim);
+    box-shadow: 0 0 20px var(--btc-glow);
+  }
+  .connect-btn.connected {
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  /* ─── Hero ────────────────────────────────────────── */
+  .hero {
+    text-align: center;
+    padding: 80px 40px 60px;
+  }
+
+  .hero-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--btc);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    opacity: 0.8;
+  }
+
+  .hero h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(56px, 9vw, 120px);
+    line-height: 0.9;
+    letter-spacing: 2px;
+    margin-bottom: 24px;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--btc);
+    text-shadow: 0 0 60px var(--btc-glow);
+  }
+
+  .hero-sub {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 480px;
+    margin: 0 auto 48px;
+    line-height: 1.6;
+  }
+
+  /* ─── Stats row ───────────────────────────────────── */
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 48px;
+    padding: 24px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    margin-bottom: 60px;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: var(--btc);
+    letter-spacing: 2px;
+  }
+  .stat-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ─── Main layout ─────────────────────────────────── */
+  .main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 40px 80px;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 32px;
+  }
+
+  /* ─── Panel ───────────────────────────────────────── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 32px;
+  }
+
+  .panel-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: var(--btc);
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─── Form ────────────────────────────────────────── */
+  .form-group {
+    margin-bottom: 20px;
+  }
+  .form-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus {
+    border-color: var(--btc);
+    box-shadow: 0 0 0 1px var(--btc-dim);
+  }
+
+  .form-input-group {
+    display: flex;
+    gap: 0;
+  }
+  .form-input-group .form-input { flex: 1; }
+  .form-input-suffix {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: none;
+    padding: 12px 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--btc);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ─── Interval presets ────────────────────────────── */
+  .interval-presets {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .preset-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 4px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  .preset-btn:hover, .preset-btn.active {
+    border-color: var(--btc);
+    color: var(--btc);
+    background: var(--btc-dim);
+  }
+
+  /* ─── CTA button ──────────────────────────────────── */
+  .cta-btn {
+    width: 100%;
+    background: var(--btc);
+    border: none;
+    color: #000;
+    padding: 16px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .cta-btn:hover {
+    background: #ffab3a;
+    box-shadow: 0 0 30px var(--btc-glow);
+    transform: translateY(-1px);
+  }
+  .cta-btn:disabled {
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .secondary-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .secondary-btn:hover {
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  /* ─── Schedule card ───────────────────────────────── */
+  .schedule-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .schedule-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(247,147,26,0.06);
+  }
+  .schedule-row:last-child { border-bottom: none; }
+  .schedule-row-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .schedule-row-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+  .status-badge.active {
+    background: rgba(61,255,110,0.08);
+    border: 1px solid rgba(61,255,110,0.3);
+    color: var(--green);
+  }
+  .status-badge.inactive {
+    background: rgba(255,69,69,0.08);
+    border: 1px solid rgba(255,69,69,0.3);
+    color: var(--red);
+  }
+
+  /* ─── Progress bar ────────────────────────────────── */
+  .progress-section {
+    margin: 20px 0;
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .progress-track {
+    height: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--btc);
+    box-shadow: 0 0 10px var(--btc-glow);
+    transition: width 0.5s ease;
+  }
+
+  /* ─── History table ───────────────────────────────── */
+  .history-section { margin-top: 32px; }
+
+  .history-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .history-table th {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-table td {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(247,147,26,0.04);
+  }
+  .history-table tr:hover td { background: var(--btc-dim); }
+  .td-green { color: var(--green) !important; }
+  .td-btc { color: var(--btc) !important; }
+
+  /* ─── Right panel ─────────────────────────────────── */
+  .right-col { display: flex; flex-direction: column; gap: 24px; }
+
+  /* ─── Execute panel ───────────────────────────────── */
+  .countdown-ring {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 24px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    text-align: center;
+    position: relative;
+  }
+
+  .countdown-circle {
+    width: 120px;
+    height: 120px;
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .countdown-circle svg {
+    transform: rotate(-90deg);
+    width: 120px;
+    height: 120px;
+  }
+  .countdown-track {
+    fill: none;
+    stroke: var(--surface2);
+    stroke-width: 4;
+  }
+  .countdown-progress {
+    fill: none;
+    stroke: var(--btc);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 339.29;
+    stroke-dashoffset: 169; /* 50% */
+    transition: stroke-dashoffset 0.5s ease;
+    filter: drop-shadow(0 0 4px var(--btc));
+  }
+  .countdown-number {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--btc);
+    letter-spacing: 2px;
+  }
+  .countdown-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .execute-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 14px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .execute-btn:hover:not(:disabled) {
+    background: rgba(61,255,110,0.08);
+    box-shadow: 0 0 20px rgba(61,255,110,0.2);
+  }
+  .execute-btn:disabled {
+    border-color: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+
+  /* ─── Info box ────────────────────────────────────── */
+  .info-box {
+    background: var(--btc-dim);
+    border: 1px solid var(--border);
+    padding: 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(247,147,26,0.8);
+    line-height: 1.6;
+    letter-spacing: 0.5px;
+  }
+  .info-box strong { color: var(--btc); }
+
+  /* ─── How it works ────────────────────────────────── */
+  .how-section {
+    border-top: 1px solid var(--border);
+    padding: 60px 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .how-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 4px;
+    color: var(--text);
+    margin-bottom: 48px;
+    text-align: center;
+  }
+  .how-title em { color: var(--btc); font-style: normal; }
+
+  .how-steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+  .how-step {
+    padding: 24px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .how-step::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--btc);
+    opacity: 0.5;
+  }
+  .how-step-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 64px;
+    color: var(--btc-dim);
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .how-step-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--btc);
+    margin-bottom: 8px;
+  }
+  .how-step p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* ─── Footer ──────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  footer a { color: var(--btc); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ─── Toast ───────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: var(--surface);
+    border: 1px solid var(--btc);
+    padding: 14px 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--btc);
+    z-index: 1000;
+    transform: translateX(200%);
+    transition: transform 0.3s ease;
+  }
+  .toast.show { transform: translateX(0); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  /* ─── Animations ──────────────────────────────────── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .panel, .stat { animation: fadeIn 0.5s ease both; }
+  .panel:nth-child(2) { animation-delay: 0.1s; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .how-steps { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 16px 20px; }
+    .hero h1 { font-size: 64px; }
+    .stats-row { gap: 24px; flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="glow-blob"></div>
+<div class="page">
+
+<!-- ─── Header ──────────────────────────────────────── -->
+<header>
+  <div class="logo">SATS<span>.</span>DCA</div>
+  <div class="block-ticker">
+    <div class="dot"></div>
+    <span>BLOCK <span id="blockNum">892,441</span></span>
+    &nbsp;·&nbsp;
+    <span id="networkLabel">TESTNET</span>
+  </div>
+  <button class="connect-btn" id="connectBtn" onclick="toggleConnect()">
+    CONNECT WALLET
+  </button>
+</header>
+
+<!-- ─── Hero ─────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-tag">⚡ Powered by OP_NET · Bitcoin Layer 1</div>
+  <h1>STACK SATS<br><em>ON-CHAIN</em><br>NO TRUST</h1>
+  <p class="hero-sub">
+    Set a schedule. Forget about it. The contract automatically swaps your tokens
+    at every block interval — no custodians, no bridges, pure Bitcoin L1.
+  </p>
+</section>
+
+<!-- ─── Stats ─────────────────────────────────────────── -->
+<div class="stats-row">
+  <div class="stat">
+    <div class="stat-value" id="statTVL">0</div>
+    <div class="stat-label">Total Deposited (MOTO)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="statExecuted">0</div>
+    <div class="stat-label">Total Swaps Executed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="statSchedules">0</div>
+    <div class="stat-label">Active Schedules</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="statSaved">~14%</div>
+    <div class="stat-label">Avg Cost Saving vs Lump Sum</div>
+  </div>
+</div>
+
+<!-- ─── Main ──────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Left: Form + History -->
+  <div class="left-col">
+    <div class="panel">
+      <div class="panel-title">Setup DCA Schedule</div>
+
+      <div class="form-group">
+        <label class="form-label">Target Token</label>
+        <select class="form-input" id="targetToken">
+          <option value="moto">MOTO (Motoswap)</option>
+          <option value="pill">$PILL (Orange Pill)</option>
+          <option value="custom">Custom OP-20 address…</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="customAddrGroup" style="display:none">
+        <label class="form-label">Contract Address</label>
+        <input class="form-input" id="customAddr" placeholder="bc1q…" type="text">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Deposit Amount</label>
+        <div class="form-input-group">
+          <input class="form-input" id="depositAmount" type="number" placeholder="1000" min="1">
+          <div class="form-input-suffix">MOTO</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Swap Amount Per Interval</label>
+        <div class="form-input-group">
+          <input class="form-input" id="swapAmount" type="number" placeholder="100" min="1">
+          <div class="form-input-suffix">MOTO</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Interval</label>
+        <div class="interval-presets">
+          <button class="preset-btn" onclick="setDCAInterval(6, this)">~1H<br><small>6 blks</small></button>
+          <button class="preset-btn active" onclick="setDCAInterval(144, this)">~1D<br><small>144 blks</small></button>
+          <button class="preset-btn" onclick="setDCAInterval(1008, this)">~1W<br><small>1008 blks</small></button>
+          <button class="preset-btn" onclick="setDCAInterval(4320, this)">~1M<br><small>4320 blks</small></button>
+        </div>
+        <input type="hidden" id="intervalBlocks" value="144">
+      </div>
+
+      <div class="info-box" style="margin-bottom:16px">
+        <strong>ESTIMATE</strong><br>
+        Deposit: <span id="estDeposit">1000 MOTO</span> · 
+        Swaps: <span id="estSwaps">10×</span> · 
+        Duration: <span id="estDuration">~10 days</span>
+      </div>
+
+      <button class="cta-btn" id="createBtn" onclick="createSchedule()">
+        ACTIVATE SCHEDULE
+      </button>
+      <button class="secondary-btn" onclick="cancelSchedule()">
+        CANCEL & PAUSE
+      </button>
+    </div>
+
+    <!-- History -->
+    <div class="panel history-section">
+      <div class="panel-title">Execution History</div>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Block</th>
+            <th>Spent</th>
+            <th>Received</th>
+            <th>Avg Price</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:24px;font-size:11px;letter-spacing:2px">CONNECT WALLET TO VIEW HISTORY</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Right: Status + Execute -->
+  <div class="right-col">
+
+    <div class="panel">
+      <div class="panel-title">Your Schedule</div>
+      <div class="schedule-card" id="scheduleCard">
+        <div class="schedule-row">
+          <span class="schedule-row-label">Status</span>
+          <span class="schedule-row-value">
+            <span class="status-badge inactive" id="statusBadge">● INACTIVE</span>
+          </span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row-label">Balance</span>
+          <span class="schedule-row-value td-btc" id="schedBalance">— MOTO</span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row-label">Swap Size</span>
+          <span class="schedule-row-value" id="schedSwapSize">—</span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row-label">Interval</span>
+          <span class="schedule-row-value" id="schedInterval">—</span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row-label">Last Executed</span>
+          <span class="schedule-row-value" id="schedLastBlock">—</span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row-label">Total Bought</span>
+          <span class="schedule-row-value td-green" id="schedTotalBought">— MOTO</span>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-label">
+          <span>NEXT SWAP IN</span>
+          <span id="blocksLeft">— BLOCKS</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execute panel -->
+    <div class="panel">
+      <div class="panel-title">Execute Swap</div>
+      <div class="countdown-ring">
+        <div class="countdown-circle">
+          <svg viewBox="0 0 120 120">
+            <circle class="countdown-track" cx="60" cy="60" r="54"/>
+            <circle class="countdown-progress" id="countdownArc" cx="60" cy="60" r="54"/>
+          </svg>
+          <div class="countdown-number" id="countdownNum">0%</div>
+        </div>
+        <div class="countdown-label">INTERVAL PROGRESS</div>
+        <button class="execute-btn" id="executeBtn" disabled onclick="executeSwap()">
+          EXECUTE SWAP NOW
+        </button>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="info-box">
+      <strong>HOW EXECUTION WORKS</strong><br><br>
+      Anyone can trigger the execute() function when your interval has elapsed.
+      Keepers earn a small fee. No centralized server needed — 
+      it's pure Bitcoin L1 smart contract logic.
+    </div>
+
+  </div>
+</div>
+
+<!-- ─── How it works ──────────────────────────────────── -->
+<section class="how-section">
+  <div class="how-title">HOW IT <em>WORKS</em></div>
+  <div class="how-steps">
+    <div class="how-step">
+      <div class="how-step-num">01</div>
+      <div class="how-step-title">Deposit</div>
+      <p>Send MOTO or any OP-20 token into the vault. Your funds stay on-chain, non-custodial, under your control.</p>
+    </div>
+    <div class="how-step">
+      <div class="how-step-num">02</div>
+      <div class="how-step-title">Schedule</div>
+      <p>Set interval (in blocks) and swap size. 6 blocks ≈ 1 hour. 144 blocks ≈ 1 day. You choose the cadence.</p>
+    </div>
+    <div class="how-step">
+      <div class="how-step-num">03</div>
+      <div class="how-step-title">Auto-Swap</div>
+      <p>Each interval, the contract routes through Motoswap to buy your target token at market price. Trustless.</p>
+    </div>
+    <div class="how-step">
+      <div class="how-step-num">04</div>
+      <div class="how-step-title">Accumulate</div>
+      <p>Watch your stack grow. Withdraw at any time. Cancel anytime. Your keys, your sats, Bitcoin L1.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ─────────────────────────────────────────── -->
+<footer>
+  <div>SATS.DCA · Built on <a href="https://opnet.org" target="_blank">OP_NET</a> Bitcoin L1</div>
+  <div>
+    <a href="https://github.com/YOUR_HANDLE/btc-dca-bot" target="_blank">GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://docs.opnet.org" target="_blank">Docs</a>
+    &nbsp;·&nbsp;
+    <a href="https://discord.com/invite/opnet" target="_blank">Discord</a>
+  </div>
+  <div>#opnetvibecode</div>
+</footer>
+
+</div><!-- /.page -->
+
+<!-- ─── Toast ──────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let connected = false;
+let walletAddress = null;
+let intervalBlocksVal = 144;
+let simBlock = 892441;
+let scheduleActive = false;
+let scheduleData = {
+  balance: 0,
+  swapSize: 0,
+  interval: 0,
+  lastBlock: 0,
+  totalBought: 0,
+};
+
+// ── Fake block ticker ──────────────────────────────────────────────────────────
+setInterval(() => {
+  simBlock++;
+  document.getElementById('blockNum').textContent = simBlock.toLocaleString();
+  if (scheduleActive) updateProgressUI();
+}, 3000);
+
+// ── Stats counter animation ────────────────────────────────────────────────────
+function animateCounter(el, target, suffix = '') {
+  let start = 0;
+  const step = target / 40;
+  const t = setInterval(() => {
+    start += step;
+    if (start >= target) { start = target; clearInterval(t); }
+    el.textContent = Math.floor(start).toLocaleString() + suffix;
+  }, 30);
+}
+setTimeout(() => {
+  animateCounter(document.getElementById('statTVL'), 148320);
+  animateCounter(document.getElementById('statExecuted'), 2847);
+  animateCounter(document.getElementById('statSchedules'), 93);
+}, 500);
+
+// ── Wallet connect ─────────────────────────────────────────────────────────────
+function toggleConnect() {
+  if (!connected) {
+    // Simulate OP_WALLET connection
+    connected = true;
+    walletAddress = 'bc1q...a7f3';
+    document.getElementById('connectBtn').textContent = walletAddress;
+    document.getElementById('connectBtn').classList.add('connected');
+    showToast('Wallet connected · ' + walletAddress);
+    loadMockHistory();
+  } else {
+    connected = false;
+    walletAddress = null;
+    document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
+    document.getElementById('connectBtn').classList.remove('connected');
+  }
+}
+
+// ── Interval presets ───────────────────────────────────────────────────────────
+function setDCAInterval(blocks, btn) {
+  intervalBlocksVal = blocks;
+  document.getElementById('intervalBlocks').value = blocks;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateEstimate();
+}
+
+// ── Live estimate ──────────────────────────────────────────────────────────────
+function updateEstimate() {
+  const dep = parseFloat(document.getElementById('depositAmount').value) || 0;
+  const swap = parseFloat(document.getElementById('swapAmount').value) || 1;
+  const interval = intervalBlocksVal;
+  const swaps = Math.floor(dep / swap);
+  const blocks = swaps * interval;
+  const mins = blocks * 10;
+  let dur = '';
+  if (mins < 60) dur = `~${mins} min`;
+  else if (mins < 1440) dur = `~${Math.round(mins/60)} hrs`;
+  else if (mins < 10080) dur = `~${Math.round(mins/1440)} days`;
+  else dur = `~${Math.round(mins/10080)} weeks`;
+
+  document.getElementById('estDeposit').textContent = dep.toLocaleString() + ' MOTO';
+  document.getElementById('estSwaps').textContent = swaps + '×';
+  document.getElementById('estDuration').textContent = dur || '—';
+}
+
+document.getElementById('depositAmount').addEventListener('input', updateEstimate);
+document.getElementById('swapAmount').addEventListener('input', updateEstimate);
+document.getElementById('targetToken').addEventListener('change', function() {
+  document.getElementById('customAddrGroup').style.display =
+    this.value === 'custom' ? 'block' : 'none';
+});
+
+// ── Create schedule ────────────────────────────────────────────────────────────
+function createSchedule() {
+  if (!connected) {
+    showToast('Connect your OP_WALLET first', true);
+    return;
+  }
+  const deposit = parseFloat(document.getElementById('depositAmount').value);
+  const swapAmt = parseFloat(document.getElementById('swapAmount').value);
+
+  if (!deposit || !swapAmt) {
+    showToast('Fill in deposit and swap amount', true);
+    return;
+  }
+  if (swapAmt > deposit) {
+    showToast('Swap amount > deposit balance', true);
+    return;
+  }
+
+  const btn = document.getElementById('createBtn');
+  btn.textContent = 'BROADCASTING TX…';
+  btn.disabled = true;
+
+  setTimeout(() => {
+    scheduleActive = true;
+    scheduleData = {
+      balance: deposit,
+      swapSize: swapAmt,
+      interval: intervalBlocksVal,
+      lastBlock: simBlock,
+      totalBought: 0,
+    };
+
+    updateScheduleUI();
+    btn.textContent = 'ACTIVATE SCHEDULE';
+    btn.disabled = false;
+    showToast('Schedule activated · tx confirmed in block ' + simBlock);
+  }, 1800);
+}
+
+// ── Cancel schedule ────────────────────────────────────────────────────────────
+function cancelSchedule() {
+  if (!scheduleActive) return;
+  scheduleActive = false;
+  updateScheduleUI();
+  showToast('Schedule cancelled');
+}
+
+// ── Execute swap ───────────────────────────────────────────────────────────────
+function executeSwap() {
+  if (!scheduleActive) return;
+  const btn = document.getElementById('executeBtn');
+  btn.textContent = 'EXECUTING…';
+  btn.disabled = true;
+
+  setTimeout(() => {
+    const received = (scheduleData.swapSize * (0.95 + Math.random() * 0.1)).toFixed(2);
+    scheduleData.balance -= scheduleData.swapSize;
+    scheduleData.totalBought += parseFloat(received);
+    scheduleData.lastBlock = simBlock;
+
+    addHistoryRow(simBlock, scheduleData.swapSize, received);
+
+    if (scheduleData.balance < scheduleData.swapSize) {
+      scheduleActive = false;
+      showToast('Swap executed · Balance depleted, schedule paused');
+    } else {
+      showToast(`Swap executed · Received ${received} MOTO`);
+    }
+    updateScheduleUI();
+    btn.textContent = 'EXECUTE SWAP NOW';
+  }, 1500);
+}
+
+// ── Update UI ──────────────────────────────────────────────────────────────────
+function updateScheduleUI() {
+  const badge = document.getElementById('statusBadge');
+  badge.className = 'status-badge ' + (scheduleActive ? 'active' : 'inactive');
+  badge.textContent = scheduleActive ? '● ACTIVE' : '● INACTIVE';
+
+  document.getElementById('schedBalance').textContent =
+    scheduleData.balance.toLocaleString() + ' MOTO';
+  document.getElementById('schedSwapSize').textContent =
+    scheduleData.swapSize ? scheduleData.swapSize.toLocaleString() + ' MOTO' : '—';
+  document.getElementById('schedInterval').textContent =
+    scheduleData.interval ? scheduleData.interval + ' blocks' : '—';
+  document.getElementById('schedLastBlock').textContent =
+    scheduleData.lastBlock ? '#' + scheduleData.lastBlock.toLocaleString() : '—';
+  document.getElementById('schedTotalBought').textContent =
+    scheduleData.totalBought ? scheduleData.totalBought.toFixed(2) + ' MOTO' : '—';
+
+  updateProgressUI();
+}
+
+function updateProgressUI() {
+  if (!scheduleActive || !scheduleData.interval) {
+    document.getElementById('blocksLeft').textContent = '— BLOCKS';
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('countdownNum').textContent = '0%';
+    document.getElementById('countdownArc').style.strokeDashoffset = 339.29;
+    document.getElementById('executeBtn').disabled = true;
+    return;
+  }
+
+  const elapsed = simBlock - scheduleData.lastBlock;
+  const pct = Math.min((elapsed / scheduleData.interval) * 100, 100);
+  const blocksLeft = Math.max(scheduleData.interval - elapsed, 0);
+  const ready = pct >= 100;
+
+  document.getElementById('blocksLeft').textContent = ready ? 'READY!' : blocksLeft + ' BLOCKS';
+  document.getElementById('progressFill').style.width = pct.toFixed(1) + '%';
+  document.getElementById('countdownNum').textContent = Math.floor(pct) + '%';
+
+  const circumference = 339.29;
+  const offset = circumference - (pct / 100) * circumference;
+  document.getElementById('countdownArc').style.strokeDashoffset = offset;
+  document.getElementById('countdownArc').style.stroke = ready ? 'var(--green)' : 'var(--btc)';
+
+  document.getElementById('executeBtn').disabled = !ready;
+}
+
+// ── History ────────────────────────────────────────────────────────────────────
+function addHistoryRow(block, spent, received) {
+  const tbody = document.getElementById('historyBody');
+  const price = (spent / received).toFixed(4);
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td class="td-btc">#${block.toLocaleString()}</td>
+    <td>${spent} MOTO</td>
+    <td class="td-green">${received} MOTO</td>
+    <td>${price}</td>
+    <td><span style="color:var(--green);font-size:11px">✓ CONFIRMED</span></td>
+  `;
+  if (tbody.children.length === 1 && tbody.children[0].querySelector('[colspan]')) {
+    tbody.innerHTML = '';
+  }
+  tbody.insertBefore(row, tbody.firstChild);
+}
+
+function loadMockHistory() {
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '';
+  const mockData = [
+    [892430, 100, '98.32'],
+    [892286, 100, '101.44'],
+    [892142, 100, '97.88'],
+  ];
+  mockData.forEach(([b, spent, received]) => addHistoryRow(b, spent, received));
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function showToast(msg, error = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (error ? ' error' : '');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
