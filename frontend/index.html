@@ -370,13 +370,32 @@ function handleCreateSchedule() {
   if (!deposit || !swapAmt) { showToast('Fill in amounts', true); return; }
   if (swapAmt > deposit) { showToast('Swap > deposit', true); return; }
 
+  const targetToken = document.getElementById('targetToken').value;
+  const outputToken = targetToken === 'custom'
+    ? document.getElementById('customAddr').value
+    : targetToken === 'pill'
+      ? 'opt1sq2zf6kdf7e2vhyz2e7ejnss6hs8skvqcqxj8aw'
+      : 'opt1sq8xjhnkzalxk3vw8kjnjpgm3qm4mhucqkj9e8h';
+
   const btn = document.getElementById('createBtn');
   btn.textContent = 'BROADCASTING TX...';
   btn.disabled = true;
 
-  Promise.resolve(window.opnet.signAndBroadcastInteraction({ to: CONTRACT_ADDRESS, value: '0' }))
+  const depositSats = BigInt(Math.floor(deposit * 1e8));
+  const swapSats    = BigInt(Math.floor(swapAmt * 1e8));
+  const interval    = BigInt(intervalBlocksVal);
+
+  Promise.resolve(window.opnet.signAndBroadcastInteraction({
+    to: CONTRACT_ADDRESS,
+    value: '0',
+    data: {
+      functionName: 'setSchedule',
+      args: [outputToken, swapSats, interval]
+    }
+  }))
     .then(function(txHash) {
-      showToast('✓ Tx: ' + txHash.slice(0, 16) + '...');
+      const id = typeof txHash === 'string' ? txHash : (txHash && txHash.txid ? txHash.txid : JSON.stringify(txHash));
+      showToast('✓ Tx: ' + id.slice(0, 16) + '...');
       scheduleActive = true;
       scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
       updateScheduleUI();
@@ -384,7 +403,7 @@ function handleCreateSchedule() {
       btn.disabled = false;
     })
     .catch(function(err) {
-      showToast('Error: ' + err.message, true);
+      showToast('Error: ' + (err.message || err), true);
       btn.textContent = 'ACTIVATE SCHEDULE';
       btn.disabled = false;
     });
