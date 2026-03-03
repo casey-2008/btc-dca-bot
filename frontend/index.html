@@ -100,7 +100,13 @@
   .toast.show { transform: translateX(0); }
   .toast.error { border-color: var(--red); color: var(--red); }
 </style>
-<script src="https://motoswap.org/js/opnet-CaS_dbxs.js"></script>  
+<script type="module">
+import { getContract, JSONRpcProvider, OP_20_ABI } from 'https://motoswap.org/js/opnet-CaS_dbxs.js';
+window.OPNetGetContract = getContract;
+window.OPNetProvider = JSONRpcProvider;
+window.OPNET_OP20_ABI = OP_20_ABI;
+console.log('OPNet SDK loaded!');
+</script>  
 </head>
 <body>
 <div class="glow-blob"></div>
