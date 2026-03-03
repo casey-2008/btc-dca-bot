@@ -422,7 +422,7 @@ async function handleCreateSchedule() {
     updateScheduleUI();
   } catch(err) {
     showToast('Error: ' + (err.message || err), true);
-  }
+
 
   btn.textContent = 'ACTIVATE SCHEDULE';
   btn.disabled = false;
