@@ -399,23 +399,12 @@ async function handleCreateSchedule() {
     for (let i = 31; i >= 0; i--) { buf[68+i] = Number(iv & 0xffn); iv >>= 8n; }
     const calldata = Array.from(buf).map(b => b.toString(16).padStart(2,'0')).join('');
 
-    const result = await window.opnet._request({
-      method: 'signInteraction',
-      params: {
-        interactionParameters: {
-          contract: '0xa67abbd2dcf237aa6aa51a3223f2770a10524c2fda669812fdd40baf8f044731',
-          calldata: calldata,
-          priorityFee: '0',
-          feeRate: 1.5,
-          from: from,
-          utxos: utxos
-        },
-        network: 'testnet',
-        contractInfo: { name: 'DCAVault', symbol: 'DCA', decimals: 8, logo: '', contractAddress: CONTRACT_ADDRESS }
-      }
-    });
+    const result = await window.opnet.signAndBroadcastInteraction({
+  to: CONTRACT_ADDRESS,
+  value: '0',
+  calldata: Array.from(buf)
+});
 
-    await window.opnet.broadcast(result);
     showToast('✓ Schedule activated!');
     scheduleActive = true;
     scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
