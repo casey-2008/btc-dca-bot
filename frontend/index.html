@@ -381,18 +381,18 @@ function handleCreateSchedule() {
   btn.textContent = 'BROADCASTING TX...';
   btn.disabled = true;
 
-  const depositSats = BigInt(Math.floor(deposit * 1e8));
-  const swapSats    = BigInt(Math.floor(swapAmt * 1e8));
-  const interval    = BigInt(intervalBlocksVal);
+  const swapSats = BigInt(Math.floor(swapAmt * 1e8));
+  const interval = BigInt(intervalBlocksVal);
 
-  Promise.resolve(window.opnet.signAndBroadcastInteraction({
+  Promise.resolve(window.opnet.signInteraction({
     to: CONTRACT_ADDRESS,
     value: '0',
-    data: {
-      functionName: 'setSchedule',
-      args: [outputToken, swapSats, interval]
-    }
+    functionName: 'setSchedule',
+    args: [outputToken, swapSats, interval]
   }))
+    .then(function(result) {
+      return window.opnet.broadcast(result);
+    })
     .then(function(txHash) {
       const id = typeof txHash === 'string' ? txHash : (txHash && txHash.txid ? txHash.txid : JSON.stringify(txHash));
       showToast('✓ Tx: ' + id.slice(0, 16) + '...');
