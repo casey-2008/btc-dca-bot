@@ -364,7 +364,7 @@ function handlePreset(blocks, btn) {
 }
 
 // Create schedule
-function handleCreateSchedule() {
+async function handleCreateSchedule() {
   if (!connected) { showToast('Connect wallet first', true); return; }
   const deposit = parseFloat(document.getElementById('depositAmount').value);
   const swapAmt = parseFloat(document.getElementById('swapAmount').value);
@@ -373,41 +373,60 @@ function handleCreateSchedule() {
 
   const targetToken = document.getElementById('targetToken').value;
   const outputToken = targetToken === 'custom'
-    ? document.getElementById('customAddr').value
+    ? document.getElementById('customAddr').value.replace('0x','')
     : targetToken === 'pill'
-      ? '0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb'
-      : '0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
+      ? 'b09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb'
+      : 'fd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
 
   const btn = document.getElementById('createBtn');
   btn.textContent = 'BROADCASTING TX...';
   btn.disabled = true;
 
-  const swapSats = BigInt(Math.floor(swapAmt * 1e8));
-  const interval = BigInt(intervalBlocksVal);
+  try {
+    const accounts = await window.opnet.getAccounts();
+    const from = accounts[0];
+    const utxos = await window.opnet.getBitcoinUtxos();
+    const swapSats = BigInt(Math.floor(swapAmt * 1e8));
+    const interval = BigInt(intervalBlocksVal);
 
-  // Encode calldata manually
-  // setSchedule selector = 0x6a07e23c
-  // args: address (32 bytes) + uint256 (32 bytes) + uint256 (32 bytes)
-  const calldata = new Uint8Array(4 + 32 + 32 + 32);
-  // selector
-  calldata[0] = 0x6a; calldata[1] = 0x07; calldata[2] = 0xe2; calldata[3] = 0x3c;
-  // outputToken address (32 bytes, hex string to bytes)
-  const addrHex = outputToken.replace('0x', '');
-  for (let i = 0; i < 32; i++) {
-    calldata[4 + i] = parseInt(addrHex.slice(i*2, i*2+2) || '0', 16);
+    const buf = new Uint8Array(100);
+    buf[0]=0x6a; buf[1]=0x07; buf[2]=0xe2; buf[3]=0x3c;
+    const tokenHex = outputToken.padStart(64, '0');
+    for (let i = 0; i < 32; i++) buf[4+i] = parseInt(tokenHex.slice(i*2, i*2+2), 16);
+    let s = swapSats;
+    for (let i = 31; i >= 0; i--) { buf[36+i] = Number(s & 0xffn); s >>= 8n; }
+    let iv = interval;
+    for (let i = 31; i >= 0; i--) { buf[68+i] = Number(iv & 0xffn); iv >>= 8n; }
+    const calldata = Array.from(buf).map(b => b.toString(16).padStart(2,'0')).join('');
+
+    const result = await window.opnet._request({
+      method: 'signInteraction',
+      params: {
+        interactionParameters: {
+          contract: '0x0801b499a6653eb5830069fb0aa092923ed2c137',
+          calldata: calldata,
+          priorityFee: '0',
+          feeRate: 1.5,
+          from: from,
+          utxos: utxos
+        },
+        network: 'testnet',
+        contractInfo: { name: 'DCAVault', symbol: 'DCA', decimals: 8, logo: '', contractAddress: CONTRACT_ADDRESS }
+      }
+    });
+
+    await window.opnet.broadcast(result);
+    showToast('✓ Schedule activated!');
+    scheduleActive = true;
+    scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
+    updateScheduleUI();
+  } catch(err) {
+    showToast('Error: ' + (err.message || err), true);
   }
-  // swapSats as uint256 big-endian (32 bytes)
-  let s = swapSats;
-  for (let i = 31; i >= 0; i--) {
-    calldata[36 + i] = Number(s & 0xffn);
-    s >>= 8n;
-  }
-  // interval as uint256 big-endian (32 bytes)
-  let iv = interval;
-  for (let i = 31; i >= 0; i--) {
-    calldata[68 + i] = Number(iv & 0xffn);
-    iv >>= 8n;
-  }
+
+  btn.textContent = 'ACTIVATE SCHEDULE';
+  btn.disabled = false;
+}
 
   Promise.resolve(window.opnet.signInteraction({
     to: CONTRACT_ADDRESS,
