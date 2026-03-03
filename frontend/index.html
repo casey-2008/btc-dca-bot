@@ -100,6 +100,7 @@
   .toast.show { transform: translateX(0); }
   .toast.error { border-color: var(--red); color: var(--red); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@btc-vision/transaction@latest/build/index.min.js"></script>  
 </head>
 <body>
 <div class="glow-blob"></div>
@@ -374,8 +375,8 @@ function handleCreateSchedule() {
   const outputToken = targetToken === 'custom'
     ? document.getElementById('customAddr').value
     : targetToken === 'pill'
-      ? '0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd'
-      : '0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb';
+      ? '0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb'
+      : '0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
 
   const btn = document.getElementById('createBtn');
   btn.textContent = 'BROADCASTING TX...';
@@ -384,11 +385,34 @@ function handleCreateSchedule() {
   const swapSats = BigInt(Math.floor(swapAmt * 1e8));
   const interval = BigInt(intervalBlocksVal);
 
+  // Encode calldata manually
+  // setSchedule selector = 0x6a07e23c
+  // args: address (32 bytes) + uint256 (32 bytes) + uint256 (32 bytes)
+  const calldata = new Uint8Array(4 + 32 + 32 + 32);
+  // selector
+  calldata[0] = 0x6a; calldata[1] = 0x07; calldata[2] = 0xe2; calldata[3] = 0x3c;
+  // outputToken address (32 bytes, hex string to bytes)
+  const addrHex = outputToken.replace('0x', '');
+  for (let i = 0; i < 32; i++) {
+    calldata[4 + i] = parseInt(addrHex.slice(i*2, i*2+2) || '0', 16);
+  }
+  // swapSats as uint256 big-endian (32 bytes)
+  let s = swapSats;
+  for (let i = 31; i >= 0; i--) {
+    calldata[36 + i] = Number(s & 0xffn);
+    s >>= 8n;
+  }
+  // interval as uint256 big-endian (32 bytes)
+  let iv = interval;
+  for (let i = 31; i >= 0; i--) {
+    calldata[68 + i] = Number(iv & 0xffn);
+    iv >>= 8n;
+  }
+
   Promise.resolve(window.opnet.signInteraction({
     to: CONTRACT_ADDRESS,
     value: '0',
-    functionName: 'setSchedule',
-    args: [outputToken, swapSats, interval]
+    calldata: calldata
   }))
     .then(function(result) {
       return window.opnet.broadcast(result);
