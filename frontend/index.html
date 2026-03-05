@@ -396,7 +396,6 @@ async function handleCreateSchedule() {
   value: '0',
   calldata: Array.from(buf)
 });
-
 const result = await window.opnet.broadcast(signed);
 const txId = result && result.txid ? result.txid : (typeof result === 'string' ? result : JSON.stringify(result));
     showToast('✓ Tx: ' + String(txId).slice(0, 16) + '...');
