@@ -380,18 +380,13 @@ async function handleCreateSchedule() {
   const targetToken = document.getElementById('targetToken').value;
   const outputToken = targetToken === 'custom'
     ? document.getElementById('customAddr').value.replace('0x','')
-    : targetToken === 'pill'
-      ? 'b09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb'
-      : 'fd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
+    : 'fd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
 
   const btn = document.getElementById('createBtn');
   btn.textContent = 'BROADCASTING TX...';
   btn.disabled = true;
 
   try {
-    const accounts = await window.opnet.getAccounts();
-    const from = accounts[0];
-    const utxos = await window.opnet.getBitcoinUtxos();
     const swapSats = BigInt(Math.floor(swapAmt * 1e8));
     const interval = BigInt(intervalBlocksVal);
 
@@ -403,26 +398,25 @@ async function handleCreateSchedule() {
     for (let i = 31; i >= 0; i--) { buf[36+i] = Number(s & 0xffn); s >>= 8n; }
     let iv = interval;
     for (let i = 31; i >= 0; i--) { buf[68+i] = Number(iv & 0xffn); iv >>= 8n; }
-    const calldata = Array.from(buf).map(b => b.toString(16).padStart(2,'0')).join('');
 
     const result = await window.opnet.signAndBroadcastInteraction({
-  to: CONTRACT_ADDRESS,
-  value: '0',
-  calldata: Array.from(buf)
-});
+      to: CONTRACT_ADDRESS,
+      value: '0',
+      calldata: Array.from(buf)
+    });
 
-    showToast('✓ Schedule activated!');
+    const txId = result && result.txid ? result.txid : (typeof result === 'string' ? result : JSON.stringify(result));
+    showToast('✓ Tx: ' + String(txId).slice(0, 16) + '...');
     scheduleActive = true;
     scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
     updateScheduleUI();
   } catch(err) {
     showToast('Error: ' + (err.message || err), true);
-
-
-  btn.textContent = 'ACTIVATE SCHEDULE';
-  btn.disabled = false;
+  } finally {
+    btn.textContent = 'ACTIVATE SCHEDULE';
+    btn.disabled = false;
+  }
 }
-
   Promise.resolve(window.opnet.signInteraction({
     to: CONTRACT_ADDRESS,
     value: '0',
