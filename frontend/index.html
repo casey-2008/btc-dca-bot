@@ -338,7 +338,7 @@ async function handleConnect() {
   document.getElementById('connectBtn').textContent = 'CONNECTING...';
 
   try {
-    const accounts = await window.opnet.connect();
+    const accounts = await window.opnet.requestAccounts();
     const address = Array.isArray(accounts) ? accounts[0] : (accounts.address || accounts);
     
     connected = true;
