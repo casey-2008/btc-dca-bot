@@ -391,13 +391,14 @@ async function handleCreateSchedule() {
     let iv = interval;
     for (let i = 31; i >= 0; i--) { buf[68+i] = Number(iv & 0xffn); iv >>= 8n; }
 
-    const result = await window.opnet.signAndBroadcastInteraction({
-      to: CONTRACT_ADDRESS,
-      value: '0',
-      calldata: Array.from(buf)
-    });
+    const signed = await window.opnet.signInteraction({
+  to: CONTRACT_ADDRESS,
+  value: '0',
+  calldata: Array.from(buf)
+});
 
-    const txId = result && result.txid ? result.txid : (typeof result === 'string' ? result : JSON.stringify(result));
+const result = await window.opnet.broadcast(signed);
+const txId = result && result.txid ? result.txid : (typeof result === 'string' ? result : JSON.stringify(result));
     showToast('✓ Tx: ' + String(txId).slice(0, 16) + '...');
     scheduleActive = true;
     scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
