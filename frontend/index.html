@@ -326,7 +326,7 @@ setTimeout(function() {
 }, 500);
 
 // Wallet connect
-function handleConnect() {
+async function handleConnect() {
   if (connected) {
     connected = false;
     walletAddress = null;
@@ -335,32 +335,24 @@ function handleConnect() {
     return;
   }
 
-  const provider = window.opnet || window.ethereum;
-  if (!provider) {
-    showToast('OP_WALLET not found', true);
-    return;
-  }
-
   document.getElementById('connectBtn').textContent = 'CONNECTING...';
-  
-  Promise.resolve(provider.requestAccounts ? provider.requestAccounts() : provider.request({ method: 'eth_requestAccounts' }))
-    .then(function(accounts) {
-      if (accounts && accounts.length > 0) {
-        connected = true;
-        walletAddress = accounts[0];
-        const short = walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
-        document.getElementById('connectBtn').textContent = short;
-        document.getElementById('connectBtn').classList.add('connected');
-        showToast('Connected: ' + short);
-        loadMockHistory();
-      }
-    })
-    .catch(function(err) {
-      document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
-      showToast('Failed: ' + err.message, true);
-    });
-}
 
+  try {
+    const accounts = await window.opnet.connect();
+    const address = Array.isArray(accounts) ? accounts[0] : (accounts.address || accounts);
+    
+    connected = true;
+    walletAddress = address;
+    const short = String(address).slice(0, 6) + '...' + String(address).slice(-4);
+    document.getElementById('connectBtn').textContent = short;
+    document.getElementById('connectBtn').classList.add('connected');
+    showToast('Connected: ' + short);
+    loadMockHistory();
+  } catch(err) {
+    document.getElementById('connectBtn').textContent = 'CONNECT WALLET';
+    showToast('Failed: ' + (err.message || err), true);
+  }
+}
 // Interval presets
 function handlePreset(blocks, btn) {
   intervalBlocksVal = blocks;
