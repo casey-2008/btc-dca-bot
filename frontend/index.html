@@ -409,29 +409,6 @@ async function handleCreateSchedule() {
     btn.disabled = false;
   }
 }
-  Promise.resolve(window.opnet.signInteraction({
-    to: CONTRACT_ADDRESS,
-    value: '0',
-    calldata: calldata
-  }))
-    .then(function(result) {
-      return window.opnet.broadcast(result);
-    })
-    .then(function(txHash) {
-      const id = typeof txHash === 'string' ? txHash : (txHash && txHash.txid ? txHash.txid : JSON.stringify(txHash));
-      showToast('✓ Tx: ' + id.slice(0, 16) + '...');
-      scheduleActive = true;
-      scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
-      updateScheduleUI();
-      btn.textContent = 'ACTIVATE SCHEDULE';
-      btn.disabled = false;
-    })
-    .catch(function(err) {
-      showToast('Error: ' + (err.message || err), true);
-      btn.textContent = 'ACTIVATE SCHEDULE';
-      btn.disabled = false;
-    });
-}
 
 function handleCancel() {
   if (!scheduleActive) return;
