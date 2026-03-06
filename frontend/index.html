@@ -397,7 +397,9 @@ async function handleCreateSchedule() {
     interactionParameters: {
       to: CONTRACT_ADDRESS,
       value: '0',
-      calldata: Array.from(buf)
+      calldata: buf,
+      feeRate: 150,
+      priorityFee: 50000n
     }
   }
 });
