@@ -374,22 +374,29 @@ async function handleCreateSchedule() {
   btn.disabled = true;
 
   try {
-    const provider = new window.OPNetProvider('https://testnet.opnet.org');
-    const contract = window.OPNetGetContract(CONTRACT_ADDRESS, window.OPNET_OP20_ABI, provider, walletAddress);
-
     const swapSats = BigInt(Math.floor(swapAmt * 1e8));
     const intervalBig = BigInt(intervalBlocksVal);
 
-    const interaction = await contract.transfer(CONTRACT_ADDRESS, swapSats);
-    if (!interaction || !interaction.calldata) throw new Error('Failed to build interaction');
+    const buf = new Uint8Array(68);
+    // selector
+    buf[0]=0x6a; buf[1]=0x07; buf[2]=0xe2; buf[3]=0x3c;
+    // swapAmount (32 bytes big-endian)
+    let s = swapSats;
+    for (let i = 31; i >= 0; i--) { buf[4+i] = Number(s & 0xffn); s >>= 8n; }
+    // interval (32 bytes big-endian)
+    let iv = intervalBig;
+    for (let i = 31; i >= 0; i--) { buf[36+i] = Number(iv & 0xffn); iv >>= 8n; }
 
-    const result = await window.opnet.signAndBroadcastInteraction({
+    const calldata = Array.from(buf);
+    console.log('calldata length:', calldata.length, 'first bytes:', calldata.slice(0,4));
+
+    const signed = await window.opnet.signInteraction({
       to: CONTRACT_ADDRESS,
-      value: '0',
-      calldata: interaction.calldata,
-      feeRate: 150
+      value: String(Math.floor(deposit * 1e8)),
+      calldata: calldata
     });
 
+    const result = await window.opnet.broadcast(signed);
     const txId = result && result.txid ? result.txid : JSON.stringify(result);
     showToast('✓ Tx: ' + String(txId).slice(0, 16) + '...');
     scheduleActive = true;
@@ -402,7 +409,6 @@ async function handleCreateSchedule() {
     btn.disabled = false;
   }
 }
-
 function handleCancel() {
   if (!scheduleActive) return;
   scheduleActive = false;
