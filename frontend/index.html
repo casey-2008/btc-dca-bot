@@ -369,42 +369,28 @@ async function handleCreateSchedule() {
   if (!deposit || !swapAmt) { showToast('Fill in amounts', true); return; }
   if (swapAmt > deposit) { showToast('Swap > deposit', true); return; }
 
-  const targetToken = document.getElementById('targetToken').value;
-  const outputToken = targetToken === 'custom'
-    ? document.getElementById('customAddr').value.replace('0x','')
-    : 'fd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
-
   const btn = document.getElementById('createBtn');
   btn.textContent = 'BROADCASTING TX...';
   btn.disabled = true;
 
   try {
+    const provider = new window.OPNetProvider('https://testnet.opnet.org');
+    const contract = window.OPNetGetContract(CONTRACT_ADDRESS, window.OPNET_OP20_ABI, provider, walletAddress);
+
     const swapSats = BigInt(Math.floor(swapAmt * 1e8));
-    const interval = BigInt(intervalBlocksVal);
+    const intervalBig = BigInt(intervalBlocksVal);
 
-    const buf = new Uint8Array(100);
-    buf[0]=0x6a; buf[1]=0x07; buf[2]=0xe2; buf[3]=0x3c;
-    const tokenHex = outputToken.padStart(64, '0');
-    for (let i = 0; i < 32; i++) buf[4+i] = parseInt(tokenHex.slice(i*2, i*2+2), 16);
-    let s = swapSats;
-    for (let i = 31; i >= 0; i--) { buf[36+i] = Number(s & 0xffn); s >>= 8n; }
-    let iv = interval;
-    for (let i = 31; i >= 0; i--) { buf[68+i] = Number(iv & 0xffn); iv >>= 8n; }
+    const interaction = await contract.transfer(CONTRACT_ADDRESS, swapSats);
+    if (!interaction || !interaction.calldata) throw new Error('Failed to build interaction');
 
-    const signed = await window.opnet._request({
-  method: 'signInteraction',
-  params: {
-    interactionParameters: {
+    const result = await window.opnet.signAndBroadcastInteraction({
       to: CONTRACT_ADDRESS,
       value: '0',
-      calldata: buf,
-      feeRate: 150,
-      priorityFee: 50000
-    }
-  }
-});
-const result = await window.opnet.broadcast(signed);
-const txId = result && result.txid ? result.txid : (typeof result === 'string' ? result : JSON.stringify(result));
+      calldata: interaction.calldata,
+      feeRate: 150
+    });
+
+    const txId = result && result.txid ? result.txid : JSON.stringify(result);
     showToast('✓ Tx: ' + String(txId).slice(0, 16) + '...');
     scheduleActive = true;
     scheduleData = { balance: deposit, swapSize: swapAmt, interval: intervalBlocksVal, lastBlock: simBlock, totalBought: 0 };
